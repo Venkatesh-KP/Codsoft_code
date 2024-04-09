@@ -1,0 +1,109 @@
+from collections import defaultdict
+from itertools import combinations
+
+class SupermarketRecommendationSystem:
+    def __init__(self, transactions, min_support=0.1, min_confidence=0.5):
+        self.transactions = transactions
+        self.min_support = min_support
+        self.min_confidence = min_confidence
+        self.item_counts = self.calculate_item_counts()
+        self.frequent_itemsets = self.find_frequent_itemsets()
+        self.association_rules = self.generate_association_rules()
+
+    def calculate_item_counts(self):
+        item_counts = defaultdict(int)
+        for transaction in self.transactions:
+            for item in transaction:
+                item_counts[item] += 1
+        return item_counts
+
+    def find_frequent_itemsets(self):
+        frequent_itemsets = {}
+        num_transactions = len(self.transactions)
+        for item, count in self.item_counts.items():
+            support = count / num_transactions
+            if support >= self.min_support:
+                frequent_itemsets[(item,)] = support
+
+        k = 2
+        while True:
+            candidate_itemsets = self.generate_candidate_itemsets(frequent_itemsets, k)
+            frequent_itemsets_k = self.calculate_support(candidate_itemsets)
+            if not frequent_itemsets_k:
+                break
+            frequent_itemsets.update(frequent_itemsets_k)
+            k += 1
+
+        return frequent_itemsets
+
+    def generate_candidate_itemsets(self, itemsets, k):
+        candidates = set()
+        for itemset1, support1 in itemsets.items():
+            for itemset2, support2 in itemsets.items():
+                if len(set(itemset1).union(itemset2)) == k and itemset1 != itemset2:
+                    candidate = tuple(sorted(set(itemset1).union(itemset2)))
+                    if candidate not in candidates:
+                        candidates.add(candidate)
+        return candidates
+
+    def calculate_support(self, itemsets):
+        frequent_itemsets = {}
+        for itemset in itemsets:
+            count = 0
+            for transaction in self.transactions:
+                if set(itemset).issubset(set(transaction)):
+                    count += 1
+            support = count / len(self.transactions)
+            if support >= self.min_support:
+                frequent_itemsets[itemset] = support
+        return frequent_itemsets
+
+    def generate_association_rules(self):
+        association_rules = []
+        for itemset in self.frequent_itemsets.keys():
+            if len(itemset) > 1:
+                itemset_support = self.frequent_itemsets[itemset]
+                for i in range(1, len(itemset)):
+                    for antecedent in combinations(itemset, i):
+                        antecedent = tuple(sorted(antecedent))
+                        consequent = tuple(sorted(set(itemset) - set(antecedent)))
+                        antecedent_support = self.frequent_itemsets[antecedent]
+                        confidence = itemset_support / antecedent_support
+                        lift = confidence / self.frequent_itemsets[consequent]
+                        if confidence >= self.min_confidence:
+                            association_rules.append((antecedent, consequent, confidence, lift))
+        return association_rules
+
+    def generate_recommendations(self, customer_history):
+        recommendations = []
+        for itemset, support in self.frequent_itemsets.items():
+            if set(itemset).issubset(set(customer_history)):
+                recommendations.append((itemset, support))
+        return recommendations
+
+
+# Example usage
+transactions = [
+    ['milk', 'bread', 'eggs'],
+    ['milk', 'bread'],
+    ['milk', 'butter'],
+    ['bread', 'eggs'],
+    ['bread', 'butter'],
+    ['eggs', 'butter'],
+    ['milk', 'bread', 'eggs', 'butter'],
+    ['milk', 'bread', 'eggs', 'butter', 'jam']
+]
+
+recommendation_system = SupermarketRecommendationSystem(transactions)
+
+# Customer 1's purchase history
+customer_history = ['milk', 'bread']
+recommendations = recommendation_system.generate_recommendations(customer_history)
+
+print("Recommendations based on customer's purchase history:")
+for itemset, support in recommendations:
+    print(itemset, "Support:", support)
+
+print("\nAssociation Rules:")
+for rule in recommendation_system.association_rules:
+    print("Rule:", rule[0], "=>", rule[1], "Confidence:", rule[2], "Lift:", rule[3])
